@@ -147,10 +147,10 @@ public:
 	void DrawLines(T1* posPtr, int lineCnt, float b, float g, float r, int thickness = 1);
 
 	// change the color space to CIELab
-	void ToLab() const;
+	void ToLab();
 
 	template <class T1>
-	void ToLab(Image<T1>& image) const;
+	void ToLab(Image<T1>& image);
 
 	template <class T1>
 	Image<T1> dx (bool IsAdvancedFilter=false) const;
