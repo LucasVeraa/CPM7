@@ -235,7 +235,7 @@ int main(int argc, char** argv)
 
             // Actualizar progreso y mostrar cada 100,000 comparaciones
             size_t compActual = ++comparacionesHechas;
-            if (compActual % 100000 == 0) {
+            if (compActual % 1000 == 0) {
                 #pragma omp critical
                 {
                     std::cout << "Progreso: " << compActual << " / " << totalComparaciones << " comparaciones realizadas.\n";
