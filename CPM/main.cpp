@@ -233,7 +233,7 @@ int main(int argc, char** argv)
                 buffers[tid].clear();
             }
 
-            // Actualizar progreso y mostrar cada 100,000 comparaciones
+            // Actualizar progreso y mostrar cada 1000 comparaciones
             size_t compActual = ++comparacionesHechas;
             if (compActual % 1000 == 0) {
 		 auto ahora = std::chrono::high_resolution_clock::now();
