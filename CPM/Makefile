@@ -1,4 +1,4 @@
-CCPP = g++
+CCPP = g++-15
 
 # Desactivar SSE para ARM (Apple Silicon)
 SSE_FLAG = 
