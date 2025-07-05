@@ -1012,7 +1012,7 @@ void Image<T>::imagesc(char* winname, int waittime /*= 1*/) const
 }
 
 template <class T>
-void Image<T>::ToLab() const
+void Image<T>::ToLab()
 {
 	if (colorType == BGR){
 		ImageProcessing::BGR2Lab(pData, pData, imWidth, imHeight);
