@@ -236,9 +236,11 @@ int main(int argc, char** argv)
             // Actualizar progreso y mostrar cada 100,000 comparaciones
             size_t compActual = ++comparacionesHechas;
             if (compActual % 1000 == 0) {
+		 auto ahora = std::chrono::high_resolution_clock::now();
+                 std::chrono::duration<double> tiempo_transcurrido = ahora - start_total;
                 #pragma omp critical
                 {
-                    std::cout << "Progreso: " << compActual << " / " << totalComparaciones << " comparaciones realizadas.\n";
+                    std::cout << "Progreso: " << compActual << " / " << totalComparaciones << " comparaciones realizadas.\n << " | Tiempo transcurrido: " << tiempo_transcurrido.count() << " segundos\n"";
                 }
             }
         }
