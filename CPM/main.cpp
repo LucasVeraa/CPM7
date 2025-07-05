@@ -142,6 +142,7 @@ int main(int argc, char** argv)
 
     // Paralelizar el doble for: comparar todos con todos (incluyendo i == j)
     size_t totalComparaciones = 0;
+    auto tiempo_inicio = std::chrono::high_resolution_clock::now();
     #pragma omp parallel for collapse(2) schedule(dynamic,1)
     for (size_t i = 0; i < numImagenes; ++i) {
         for (size_t j = 0; j < numImagenes; ++j) {
@@ -238,8 +239,11 @@ int main(int argc, char** argv)
     for (int t = 0; t < numThreads; ++t) {
         archivosSalida[t].close();
     }
+    auto tiempo_fin = std::chrono::high_resolution_clock::now();
 
+    double duracion_ms = std::chrono::duration<double, std::milli>(tiempo_fin - tiempo_inicio).count();
     std::cout << "Comparaciones completadas.\n";
     std::cout << "Total de comparaciones realizadas: " << totalComparaciones << std::endl;
+    std::cout << "Tiempo total de ejecución: " << duracion_ms << " ms" << std::endl;
     return 0;
 }
