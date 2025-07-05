@@ -84,7 +84,7 @@ std::string removeExtension(const std::string& filename) {
     return (lastDot == std::string::npos) ? filename : filename.substr(0, lastDot);
 }
 
-const float UNKNOWN_FLOW = 1e10f; // Valor para flujos desconocidos
+
 
 int main(int argc, char** argv)
 {
