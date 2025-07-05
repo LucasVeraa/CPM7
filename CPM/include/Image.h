@@ -1023,7 +1023,7 @@ void Image<T>::ToLab()
 
 template <class T>
 template <class T1>
-void Image<T>::ToLab(Image<T1>& image) const
+void Image<T>::ToLab(Image<T1>& image)
 {
 	if (matchDimension(image) == false)
 		image.allocate(imWidth, imHeight, nChannels);
