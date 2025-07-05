@@ -96,34 +96,39 @@ int main(int argc, char** argv)
     std::string carpeta = argv[1];
     std::string archivoSalidaBase = argv[2];
 
-    std::vector<fs::path> imagenes;
+    std::vector<fs::path> rutasImagenes;
 
     for (const auto& entrada : fs::directory_iterator(carpeta)) {
         if (entrada.is_regular_file()) {
             std::string ext = entrada.path().extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
             if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tif") {
-                imagenes.push_back(entrada.path());
+                rutasImagenes.push_back(entrada.path());
             }
         }
     }
 
-    if (imagenes.size() < 2) {
+    if (rutasImagenes.size() < 2) {
         std::cerr << "Debe haber al menos 2 imágenes válidas en la carpeta.\n";
         return 1;
     }
 
-    // Cantidad de hilos
+    // Leer todas las imágenes al inicio
+    std::vector<FImage> imagenes(rutasImagenes.size());
+    for (size_t i = 0; i < rutasImagenes.size(); ++i) {
+        imagenes[i].imread(rutasImagenes[i].string().c_str());
+    }
+
     const int numThreads = 8;
     omp_set_num_threads(numThreads);
 
-    // Abrir archivos de salida por hilo e imprimir encabezados
+    // Crear archivos por hilo
     std::vector<std::ofstream> archivosSalida(numThreads);
     for (int t = 0; t < numThreads; ++t) {
         std::string nombreArchivo = archivoSalidaBase + "_thread_" + std::to_string(t) + ".csv";
         archivosSalida[t].open(nombreArchivo);
         if (!archivosSalida[t].is_open()) {
-            std::cerr << "No se pudo abrir el archivo de salida: " << nombreArchivo << "\n";
+            std::cerr << "No se pudo abrir el archivo: " << nombreArchivo << "\n";
             return 1;
         }
         archivosSalida[t] << "imagen1,imagen2,resultado,tiempo_ms\n";
@@ -131,21 +136,19 @@ int main(int argc, char** argv)
 
     std::cout << "Usando " << numThreads << " hilos.\n";
 
-    // Paralelizar el doble for con OpenMP
-    #pragma omp parallel for collapse(2) schedule(dynamic)
+    // Paralelización evitando repeticiones y comparaciones redundantes
+    #pragma omp parallel for schedule(dynamic, 1) collapse(2)
     for (int i = 0; i < (int)imagenes.size(); ++i) {
-        for (int j = 0; j < (int)imagenes.size(); ++j) {
+        for (int j = i + 1; j < (int)imagenes.size(); ++j) {
             int tid = omp_get_thread_num();
             auto start = std::chrono::high_resolution_clock::now();
 
-            FImage img1, img2;
-            img1.imread(imagenes[i].string().c_str());
-            img2.imread(imagenes[j].string().c_str());
+            FImage& img1 = imagenes[i];
+            FImage& img2 = imagenes[j];
 
             if (img1.width() != img2.width() || img1.height() != img2.height()) {
-                #pragma omp critical
                 std::cerr << "Imágenes con diferentes dimensiones: "
-                          << imagenes[i] << " y " << imagenes[j] << "\n";
+                          << rutasImagenes[i] << " y " << rutasImagenes[j] << "\n";
                 continue;
             }
 
@@ -179,9 +182,8 @@ int main(int argc, char** argv)
 
             double f = 0.0;
             if (conta1 == 0 || conta2 == 0) {
-                #pragma omp critical
                 std::cerr << "Flujo desconocido en todas las posiciones entre "
-                          << imagenes[i] << " y " << imagenes[j] << "\n";
+                          << rutasImagenes[i] << " y " << rutasImagenes[j] << "\n";
                 f = 0.0;
             } else {
                 int shift = static_cast<int>(std::abs(menor));
@@ -207,32 +209,23 @@ int main(int argc, char** argv)
                 }
             }
 
-            std::string nombre1 = removeExtension(imagenes[i].filename().string());
-            std::string nombre2 = removeExtension(imagenes[j].filename().string());
-
             auto end = std::chrono::high_resolution_clock::now();
             double duracion = std::chrono::duration<double, std::milli>(end - start).count();
 
-            // Escribir resultado en archivo correspondiente al hilo
-            #pragma omp critical
-            {
-                archivosSalida[tid] << nombre1 << "," << nombre2 << "," << (std::isnan(f) ? 0.0 : f) << "," << duracion << "\n";
-            }
+            std::string nombre1 = removeExtension(rutasImagenes[i].filename().string());
+            std::string nombre2 = removeExtension(rutasImagenes[j].filename().string());
 
-            #pragma omp critical
-            {
-                std::cout << "Hilo " << tid << " comparó: " << nombre1 << " vs " << nombre2
-                          << " = " << f << " en " << duracion << " ms\n";
-            }
+            archivosSalida[tid] << nombre1 << "," << nombre2 << "," << (std::isnan(f) ? 0.0 : f) << "," << duracion << "\n";
+
+            std::cout << "Hilo " << tid << " comparó: " << nombre1 << " vs " << nombre2
+                      << " = " << f << " en " << duracion << " ms\n";
         }
     }
 
-    // Cerrar archivos
     for (int t = 0; t < numThreads; ++t) {
         archivosSalida[t].close();
     }
 
     std::cout << "Comparaciones completadas.\n";
-
     return 0;
 }
