@@ -96,39 +96,41 @@ int main(int argc, char** argv)
     std::string carpeta = argv[1];
     std::string archivoSalidaBase = argv[2];
 
-    std::vector<fs::path> rutasImagenes;
+    std::vector<fs::path> imagenesPaths;
 
+    // Buscar imágenes en la carpeta
     for (const auto& entrada : fs::directory_iterator(carpeta)) {
         if (entrada.is_regular_file()) {
             std::string ext = entrada.path().extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
             if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tif") {
-                rutasImagenes.push_back(entrada.path());
+                imagenesPaths.push_back(entrada.path());
             }
         }
     }
 
-    if (rutasImagenes.size() < 2) {
+    if (imagenesPaths.size() < 2) {
         std::cerr << "Debe haber al menos 2 imágenes válidas en la carpeta.\n";
         return 1;
     }
 
-    // Leer todas las imágenes al inicio
-    std::vector<FImage> imagenes(rutasImagenes.size());
-    for (size_t i = 0; i < rutasImagenes.size(); ++i) {
-        imagenes[i].imread(rutasImagenes[i].string().c_str());
+    // Leer imágenes una vez
+    std::vector<FImage> imagenes(imagenesPaths.size());
+    for (size_t i = 0; i < imagenesPaths.size(); ++i) {
+        imagenes[i].imread(imagenesPaths[i].string().c_str());
     }
 
+    // Número de hilos
     const int numThreads = 8;
     omp_set_num_threads(numThreads);
 
-    // Crear archivos por hilo
+    // Crear archivos de salida separados por hilo
     std::vector<std::ofstream> archivosSalida(numThreads);
     for (int t = 0; t < numThreads; ++t) {
         std::string nombreArchivo = archivoSalidaBase + "_thread_" + std::to_string(t) + ".csv";
         archivosSalida[t].open(nombreArchivo);
         if (!archivosSalida[t].is_open()) {
-            std::cerr << "No se pudo abrir el archivo: " << nombreArchivo << "\n";
+            std::cerr << "No se pudo abrir el archivo de salida: " << nombreArchivo << "\n";
             return 1;
         }
         archivosSalida[t] << "imagen1,imagen2,resultado,tiempo_ms\n";
@@ -136,29 +138,31 @@ int main(int argc, char** argv)
 
     std::cout << "Usando " << numThreads << " hilos.\n";
 
-    // Paralelización evitando repeticiones y comparaciones redundantes
-    #pragma omp parallel for schedule(dynamic, 1) collapse(2)
-    for (int i = 0; i < (int)imagenes.size(); ++i) {
-        for (int j = i + 1; j < (int)imagenes.size(); ++j) {
+    size_t numImagenes = imagenes.size();
+
+    // Paralelizar el doble for: comparar todos con todos (incluyendo i == j)
+    size_t totalComparaciones = 0;
+    #pragma omp parallel for collapse(2) schedule(dynamic,1)
+    for (size_t i = 0; i < numImagenes; ++i) {
+        for (size_t j = 0; j < numImagenes; ++j) {
             int tid = omp_get_thread_num();
             auto start = std::chrono::high_resolution_clock::now();
 
-            FImage& img1 = imagenes[i];
-            FImage& img2 = imagenes[j];
-
-            if (img1.width() != img2.width() || img1.height() != img2.height()) {
+            // Verificar dimensiones
+            if (imagenes[i].width() != imagenes[j].width() || imagenes[i].height() != imagenes[j].height()) {
+                #pragma omp critical
                 std::cerr << "Imágenes con diferentes dimensiones: "
-                          << rutasImagenes[i] << " y " << rutasImagenes[j] << "\n";
+                          << imagenesPaths[i] << " y " << imagenesPaths[j] << "\n";
                 continue;
             }
 
-            int w = img1.width();
-            int h = img1.height();
+            int w = imagenes[i].width();
+            int h = imagenes[i].height();
 
             FImage matches, u, v;
             CPM cpm;
             cpm.SetStep(3);
-            cpm.Matching(img1, img2, matches);
+            cpm.Matching(imagenes[i], imagenes[j], matches);
             Match2Flow(matches, u, v, w, h);
 
             double menor = std::numeric_limits<double>::max();
@@ -182,8 +186,9 @@ int main(int argc, char** argv)
 
             double f = 0.0;
             if (conta1 == 0 || conta2 == 0) {
+                #pragma omp critical
                 std::cerr << "Flujo desconocido en todas las posiciones entre "
-                          << rutasImagenes[i] << " y " << rutasImagenes[j] << "\n";
+                          << imagenesPaths[i] << " y " << imagenesPaths[j] << "\n";
                 f = 0.0;
             } else {
                 int shift = static_cast<int>(std::abs(menor));
@@ -209,23 +214,32 @@ int main(int argc, char** argv)
                 }
             }
 
+            std::string nombre1 = removeExtension(imagenesPaths[i].filename().string());
+            std::string nombre2 = removeExtension(imagenesPaths[j].filename().string());
+
             auto end = std::chrono::high_resolution_clock::now();
             double duracion = std::chrono::duration<double, std::milli>(end - start).count();
 
-            std::string nombre1 = removeExtension(rutasImagenes[i].filename().string());
-            std::string nombre2 = removeExtension(rutasImagenes[j].filename().string());
-
+            // Guardar resultados sin sección crítica porque cada hilo tiene su propio archivo
             archivosSalida[tid] << nombre1 << "," << nombre2 << "," << (std::isnan(f) ? 0.0 : f) << "," << duracion << "\n";
 
-            std::cout << "Hilo " << tid << " comparó: " << nombre1 << " vs " << nombre2
-                      << " = " << f << " en " << duracion << " ms\n";
+            // Si quieres info en consola, puedes dejar este bloque con critical para evitar mezclas
+            #pragma omp critical
+            {
+                std::cout << "Hilo " << tid << " comparó: " << nombre1 << " vs " << nombre2
+                          << " = " << f << " en " << duracion << " ms\n";
+            }
+	    #pragma omp atomic
+            totalComparaciones++;
         }
     }
 
+    // Cerrar archivos
     for (int t = 0; t < numThreads; ++t) {
         archivosSalida[t].close();
     }
 
     std::cout << "Comparaciones completadas.\n";
+    std::cout << "Total de comparaciones realizadas: " << totalComparaciones << std::endl;
     return 0;
 }
