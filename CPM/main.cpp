@@ -135,7 +135,7 @@ int main(int argc, char** argv)
     size_t totalComparaciones = imagenes.size() * imagenes.size();
 
     // Buffer por hilo para acumular resultados antes de escribir
-    const size_t bufferSize = 10000;  // Ajustable según memoria y rendimiento
+    const size_t bufferSize = 1000;  // Ajustable según memoria y rendimiento
     std::vector<std::vector<std::string>> buffers(numThreads);
 
     auto startTotal = std::chrono::high_resolution_clock::now();
