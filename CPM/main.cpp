@@ -240,7 +240,7 @@ int main(int argc, char** argv)
                  std::chrono::duration<double> tiempo_transcurrido = ahora - start_total;
                 #pragma omp critical
                 {
-                    std::cout << "Progreso: " << compActual << " / " << totalComparaciones << " comparaciones realizadas.\n << " | Tiempo transcurrido: " << tiempo_transcurrido.count() << " segundos\n"";
+                    std::cout << "Progreso: " << compActual << " / " << totalComparaciones << " comparaciones realizadas.\n << " | Tiempo transcurrido: " << tiempo_transcurrido.count() << " segundos\n";
                 }
             }
         }
